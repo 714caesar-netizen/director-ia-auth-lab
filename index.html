@@ -2,180 +2,187 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://kmswrsozavxbzadtwwpn.supabase.co; form-action 'none'; base-uri 'none'">
-  <title>Director IA | Auth LAB</title>
-  <style>
-    body {
-      background: #101827;
-      color: #f4f6fa;
-      font-family: system-ui, sans-serif;
-      padding: 24px 16px;
-    }
-    main {
-      max-width: 440px;
-      margin: 40px auto;
-      background: #192438;
-      padding: 26px;
-      border: 1px solid #344154;
-      border-radius: 16px;
-    }
-    label { display: block; margin-top: 18px; }
-    input, button {
-      box-sizing: border-box;
-      width: 100%;
-      padding: 13px;
-      margin-top: 7px;
-      border-radius: 8px;
-      font-size: 16px;
-    }
-    input { border: 1px solid #64748b; }
-    button {
-      background: #6ee7b7;
-      border: 0;
-      font-weight: bold;
-      margin-top: 22px;
-      cursor: pointer;
-    }
-    button:disabled { opacity: .5; }
-    #result {
-      margin-top: 20px;
-      overflow-wrap: anywhere;
-      white-space: pre-line;
-    }
-    small { color: #b9c5d5; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy"
+ content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://kmswrsozavxbzadtwwpn.supabase.co; form-action 'none'; base-uri 'none'">
+<title>Director IA | RLS LAB</title>
+<style>
+body{background:#101827;color:#f4f6fa;font-family:system-ui,sans-serif;padding:20px}
+main{max-width:460px;margin:35px auto;padding:25px;background:#192438;border:1px solid #344154;border-radius:16px}
+label{display:block;margin-top:16px}
+input,button{box-sizing:border-box;width:100%;padding:13px;margin-top:8px;border-radius:8px;font-size:16px}
+button{background:#6ee7b7;border:0;font-weight:bold}
+button:disabled{opacity:.5}
+input{border:1px solid #64748b}
+#result{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:22px}
+small{color:#bac5d5}
+</style>
 </head>
 <body>
 <main>
-  <h1>Director IA</h1>
-  <h2>Prueba de autenticación</h2>
-  <p>LAB temporal — usuarios ficticios únicamente.</p>
+<h1>Director IA</h1>
+<h2>Prueba de permisos RLS</h2>
+<p>Laboratorio temporal. Sin datos reales.</p>
 
-  <form id="login">
-    <label for="email">Correo de prueba</label>
-    <input id="email" type="email" required
-           autocomplete="off" spellcheck="false">
+<label>Correo ficticio</label>
+<input id="email" type="email" autocomplete="off">
 
-    <label for="password">Contraseña de prueba</label>
-    <input id="password" type="password" required
-           autocomplete="off">
+<label>Contraseña ficticia</label>
+<input id="password" type="password" autocomplete="off">
 
-    <button id="submit" type="submit">
-      Verificar identidad
-    </button>
-  </form>
+<button id="signed" type="button">
+Probar usuario autenticado
+</button>
 
-  <p id="result" role="status" aria-live="polite">
-    Sin iniciar prueba.
-  </p>
+<button id="anonymous" type="button">
+Probar visitante anónimo
+</button>
 
-  <small>
-    Solo verifica identidad. No concede permisos.
-    No utilizar con cuentas reales.
-  </small>
+<p id="result" role="status" aria-live="polite">
+Sin iniciar prueba.
+</p>
+
+<small>
+Solo lectura. No se almacenan tokens.
+No usar cuentas reales.
+</small>
 </main>
-
 <script>
 "use strict";
 
-const BASE =
-  "https://kmswrsozavxbzadtwwpn.supabase.co";
+const BASE="https://kmswrsozavxbzadtwwpn.supabase.co";
+const KEY="sb_publishable_9fzDnyKmyOiFImW3OumCKg_2YZ6SWdz";
+const TABLE="director_auth_rls_lab_20261120";
+const output=document.getElementById("result");
+const buttons=document.querySelectorAll("button");
 
-const KEY =
-  "sb_publishable_9fzDnyKmyOiFImW3OumCKg_2YZ6SWdz";
+function busy(value){
+  buttons.forEach(b=>b.disabled=value);
+}
 
-const form = document.getElementById("login");
-const result = document.getElementById("result");
-const button = document.getElementById("submit");
+async function readRows(token){
+  const headers={"apikey":KEY};
+  if(token) headers.Authorization="Bearer "+token;
 
-form.addEventListener("submit", async function (event) {
-  event.preventDefault();
+  const r=await fetch(
+    BASE+"/rest/v1/"+TABLE+"?select=id,label",
+    {headers,cache:"no-store"}
+  );
 
-  const email = document.getElementById("email").value.trim();
-  const field = document.getElementById("password");
-  const password = field.value;
+  if(!r.ok){
+    throw new Error("Lectura HTTP "+r.status);
+  }
 
-  field.value = "";
-  button.disabled = true;
-  result.textContent = "Verificando con Supabase Auth...";
+  const rows=await r.json();
+  if(!Array.isArray(rows)){
+    throw new Error("Respuesta inesperada");
+  }
+  return rows;
+}
 
-  let token = null;
+document.getElementById("anonymous").onclick=async()=>{
+  busy(true);
+  output.textContent="Probando acceso anónimo...";
+  try{
+    const rows=await readRows(null);
+    output.textContent=
+      "ANÓNIMO\nHTTP 200\nRegistros visibles: "+
+      rows.length+"\n"+
+      (rows.length===0?"PASS: sin acceso al registro":
+       "FAIL: registro visible");
+  }catch(e){
+    output.textContent="ERROR: "+e.message;
+  }finally{busy(false);}
+};
 
-  try {
-    const response = await fetch(
-      BASE + "/auth/v1/token?grant_type=password",
+document.getElementById("signed").onclick=async()=>{
+  const email=document.getElementById("email").value.trim();
+  const field=document.getElementById("password");
+  const password=field.value;
+  field.value="";
+
+  if(!email||!password){
+    output.textContent="Introduce las credenciales ficticias.";
+    return;
+  }
+
+  busy(true);
+  output.textContent="Autenticando y verificando RLS...";
+  let token=null;
+
+  try{
+    const login=await fetch(
+      BASE+"/auth/v1/token?grant_type=password",
       {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          "apikey": KEY,
-          "Content-Type": "application/json"
+        method:"POST",
+        cache:"no-store",
+        headers:{
+          "apikey":KEY,
+          "Content-Type":"application/json"
         },
-        body: JSON.stringify({ email, password })
+        body:JSON.stringify({email,password})
       }
     );
 
-    if (!response.ok) {
-      result.textContent =
-        "Autenticación rechazada. Revisa los datos de prueba.";
-      return;
+    if(!login.ok){
+      throw new Error("Inicio de sesión rechazado");
     }
 
-    const session = await response.json();
-    token = session.access_token;
+    const session=await login.json();
+    token=session.access_token;
 
-    if (!token) {
-      throw new Error("Missing access token");
-    }
-
-    const verify = await fetch(BASE + "/auth/v1/user", {
-      headers: {
-        "apikey": KEY,
-        "Authorization": "Bearer " + token
+    const who=await fetch(BASE+"/auth/v1/user",{
+      headers:{
+        "apikey":KEY,
+        "Authorization":"Bearer "+token
       },
-      cache: "no-store"
+      cache:"no-store"
     });
 
-    if (!verify.ok) {
-      throw new Error("User verification failed");
+    if(!who.ok){
+      throw new Error("No se verificó la identidad");
     }
 
-    const user = await verify.json();
+    const user=await who.json();
+    const rows=await readRows(token);
 
-    result.textContent =
-      "IDENTIDAD VERIFICADA\n" +
-      "Correo: " + user.email + "\n" +
-      "ID: " + user.id + "\n" +
-      "Permisos: todavía no evaluados.";
+    const owner=
+      user.id==="5eb29fca-1278-47ee-a2a4-2cec42f209f4";
+    const expected=owner?1:0;
 
-  } catch (_) {
-    result.textContent =
-      "No se pudo completar la verificación. " +
-      "Comprueba la conexión o la configuración.";
-  } finally {
-    if (token) {
-      try {
-        await fetch(BASE + "/auth/v1/logout", {
-          method: "POST",
-          headers: {
-            "apikey": KEY,
-            "Authorization": "Bearer " + token
-          },
-          cache: "no-store"
+    output.textContent=
+      "IDENTIDAD: "+user.email+
+      "\nLECTURA HTTP: 200"+
+      "\nREGISTROS VISIBLES: "+rows.length+
+      "\nRESULTADO: "+
+      (rows.length===expected?"PASS":"FAIL")+
+      "\nESPERADOS: "+expected;
+  }catch(e){
+    output.textContent="ERROR: "+e.message;
+  }finally{
+    if(token){
+      try{
+        const logout=await fetch(BASE+"/auth/v1/logout",{
+          method:"POST",
+          cache:"no-store",
+          headers:{
+            "apikey":KEY,
+            "Authorization":"Bearer "+token
+          }
         });
-      } catch (_) {
-        result.textContent +=
-          "\nAviso: no se confirmó el cierre de sesión.";
+        if(!logout.ok){
+          output.textContent+="\nAVISO: cierre no confirmado.";
+        }
+      }catch(_){
+        output.textContent+="\nAVISO: cierre no confirmado.";
       }
     }
-    token = null;
-    button.disabled = false;
+    token=null;
+    busy(false);
   }
-});
+};
 </script>
 </body>
 </html>
