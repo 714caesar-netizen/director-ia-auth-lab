@@ -1,24 +1,181 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Director IA | Laboratorio Auth</title>
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://kmswrsozavxbzadtwwpn.supabase.co; form-action 'none'; base-uri 'none'">
+  <title>Director IA | Auth LAB</title>
   <style>
-    body { font-family: system-ui, sans-serif; background:#101827; color:#f4f6fa; margin:0; padding:32px 18px; }
-    main { max-width:480px; margin:60px auto; padding:28px; border:1px solid #344154; border-radius:16px; background:#192438; }
-    h1 { margin-top:0; }
-    .status { color:#8de0b3; }
-    small { color:#bac5d5; }
+    body {
+      background: #101827;
+      color: #f4f6fa;
+      font-family: system-ui, sans-serif;
+      padding: 24px 16px;
+    }
+    main {
+      max-width: 440px;
+      margin: 40px auto;
+      background: #192438;
+      padding: 26px;
+      border: 1px solid #344154;
+      border-radius: 16px;
+    }
+    label { display: block; margin-top: 18px; }
+    input, button {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 13px;
+      margin-top: 7px;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    input { border: 1px solid #64748b; }
+    button {
+      background: #6ee7b7;
+      border: 0;
+      font-weight: bold;
+      margin-top: 22px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .5; }
+    #result {
+      margin-top: 20px;
+      overflow-wrap: anywhere;
+      white-space: pre-line;
+    }
+    small { color: #b9c5d5; }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Director IA</h1>
-    <h2>Laboratorio de autenticación</h2>
-    <p class="status">Página de pruebas instalada correctamente.</p>
-    <p>Supabase Auth: pendiente de conexión.</p>
-    <small>Entorno temporal. Sin datos reales. No autorizado para producción.</small>
-  </main>
+<main>
+  <h1>Director IA</h1>
+  <h2>Prueba de autenticación</h2>
+  <p>LAB temporal — usuarios ficticios únicamente.</p>
+
+  <form id="login">
+    <label for="email">Correo de prueba</label>
+    <input id="email" type="email" required
+           autocomplete="off" spellcheck="false">
+
+    <label for="password">Contraseña de prueba</label>
+    <input id="password" type="password" required
+           autocomplete="off">
+
+    <button id="submit" type="submit">
+      Verificar identidad
+    </button>
+  </form>
+
+  <p id="result" role="status" aria-live="polite">
+    Sin iniciar prueba.
+  </p>
+
+  <small>
+    Solo verifica identidad. No concede permisos.
+    No utilizar con cuentas reales.
+  </small>
+</main>
+
+<script>
+"use strict";
+
+const BASE =
+  "https://kmswrsozavxbzadtwwpn.supabase.co";
+
+const KEY =
+  "sb_publishable_9fzDnyKmyOiFImW3OumCKg_2YZ6SWdz";
+
+const form = document.getElementById("login");
+const result = document.getElementById("result");
+const button = document.getElementById("submit");
+
+form.addEventListener("submit", async function (event) {
+  event.preventDefault();
+
+  const email = document.getElementById("email").value.trim();
+  const field = document.getElementById("password");
+  const password = field.value;
+
+  field.value = "";
+  button.disabled = true;
+  result.textContent = "Verificando con Supabase Auth...";
+
+  let token = null;
+
+  try {
+    const response = await fetch(
+      BASE + "/auth/v1/token?grant_type=password",
+      {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "apikey": KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email, password })
+      }
+    );
+
+    if (!response.ok) {
+      result.textContent =
+        "Autenticación rechazada. Revisa los datos de prueba.";
+      return;
+    }
+
+    const session = await response.json();
+    token = session.access_token;
+
+    if (!token) {
+      throw new Error("Missing access token");
+    }
+
+    const verify = await fetch(BASE + "/auth/v1/user", {
+      headers: {
+        "apikey": KEY,
+        "Authorization": "Bearer " + token
+      },
+      cache: "no-store"
+    });
+
+    if (!verify.ok) {
+      throw new Error("User verification failed");
+    }
+
+    const user = await verify.json();
+
+    result.textContent =
+      "IDENTIDAD VERIFICADA\n" +
+      "Correo: " + user.email + "\n" +
+      "ID: " + user.id + "\n" +
+      "Permisos: todavía no evaluados.";
+
+  } catch (_) {
+    result.textContent =
+      "No se pudo completar la verificación. " +
+      "Comprueba la conexión o la configuración.";
+  } finally {
+    if (token) {
+      try {
+        await fetch(BASE + "/auth/v1/logout", {
+          method: "POST",
+          headers: {
+            "apikey": KEY,
+            "Authorization": "Bearer " + token
+          },
+          cache: "no-store"
+        });
+      } catch (_) {
+        result.textContent +=
+          "\nAviso: no se confirmó el cierre de sesión.";
+      }
+    }
+    token = null;
+    button.disabled = false;
+  }
+});
+</script>
 </body>
 </html>
